@@ -1,5 +1,5 @@
-// Settings: every PenBridge option in one place. Values live in the app's defaults
-// domain (com.oscacace.PenBridge), so the menu bar panel and `defaults write` both work.
+// Settings: every Touchintosh option in one place. Values live in the app's defaults
+// domain (com.oscacace.Touchintosh), so the menu bar panel and `defaults write` both work.
 import Foundation
 
 /// When the charger noise filter runs. A noisy charger ground makes the digitizer
@@ -69,7 +69,7 @@ enum ButtonAction: String, Codable, CaseIterable, Identifiable {
         case .undo: return "Undo (⌘Z)"
         case .redo: return "Redo (⇧⌘Z)"
         case .shortcut: return "Keyboard shortcut…"
-        case .onScreenKeyboard: return "Show/hide PenBridge keyboard"
+        case .onScreenKeyboard: return "Show/hide Touchintosh keyboard"
         case .accessibilityKeyboard: return "Show/hide Accessibility Keyboard"
         case .missionControl: return "Mission Control"
         case .appExpose: return "App Exposé"
@@ -77,8 +77,8 @@ enum ButtonAction: String, Codable, CaseIterable, Identifiable {
         case .nextSpace: return "Next Space"
         case .previousSpace: return "Previous Space"
         case .screenshot: return "Screenshot (⇧⌘5)"
-        case .openSettings: return "Open PenBridge settings"
-        case .pause: return "Pause or resume PenBridge"
+        case .openSettings: return "Open Touchintosh settings"
+        case .pause: return "Pause or resume Touchintosh"
         }
     }
     /// Needs the button held down, which the top button can't report.
@@ -311,6 +311,17 @@ struct Config: Codable, Equatable {
     }
 
     static func migrate(_ defaults: UserDefaults = .standard) {
+        // Touchintosh was called PenBridge: bring over its settings and keyboard data once.
+        let old = "com.oscacace.PenBridge"
+        if let id = Bundle.main.bundleIdentifier, id != old, defaults.persistentDomain(forName: id)?.isEmpty ?? true,
+           let previous = defaults.persistentDomain(forName: old), !previous.isEmpty {
+            defaults.setPersistentDomain(previous, forName: id)
+        }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let oldSupport = support.appendingPathComponent("PenBridge"), newSupport = support.appendingPathComponent("Touchintosh")
+        if !FileManager.default.fileExists(atPath: newSupport.path) && FileManager.default.fileExists(atPath: oldSupport.path) {
+            try? FileManager.default.copyItem(at: oldSupport, to: newSupport)
+        }
         // Earlier versions turned palm rejection off with touchWhilePen = true.
         if defaults.object(forKey: "touchWhilePen") != nil {
             if defaults.object(forKey: "palmRejection") == nil {

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in PenBridge or the installer doesn't work as expected
+about: Something in Touchintosh or the installer doesn't work as expected
 labels: bug
 ---
 
@@ -10,6 +10,6 @@ labels: bug
 
 **Steps to reproduce:**
 
-**Laptop, macOS and PenBridge version:**
+**Laptop, macOS and Touchintosh version:**
 
-**Log:** the last lines of `~/Library/Logs/PenBridge.log` (Status tab → Open Log)
+**Log:** the last lines of `~/Library/Logs/Touchintosh.log` (Status tab → Open Log)

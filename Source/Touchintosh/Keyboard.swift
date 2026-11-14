@@ -64,11 +64,11 @@ final class KeyboardController {
     private var generating = Set<KeyLanguage>()
     private var contacts: [Int: KeyContact] = [:]
 
-    // What PenBridge typed since the context was last known, used for auto-capitals,
+    // What Touchintosh typed since the context was last known, used for auto-capitals,
     // smart spaces and suggestions. Reset when the user clicks or taps elsewhere.
     private var context = ""
     private var contextKnown = false
-    private var smartSpace = false          // the last character is a space PenBridge added
+    private var smartSpace = false          // the last character is a space Touchintosh added
     private var lastGlide: (word: String, typed: String, alternatives: [String])?
     private var lastSpaceTime = 0.0
     private(set) var suggestions: [String] = ["", "", ""]
@@ -116,7 +116,7 @@ final class KeyboardController {
             panel.animator().alphaValue = 1
         }
         publishFrame()
-        log("PenBridge: keyboard shown\(auto ? " (text field)" : "")")
+        log("Touchintosh: keyboard shown\(auto ? " (text field)" : "")")
     }
 
     func hide(byUser: Bool = false) {
@@ -134,7 +134,7 @@ final class KeyboardController {
         }, completionHandler: { [weak self] in
             if self?.visible == false { panel.orderOut(nil) }
         })
-        log("PenBridge: keyboard hidden")
+        log("Touchintosh: keyboard hidden")
     }
 
     func hideIfAutoShown() { if autoShown { hide() } }
@@ -280,14 +280,14 @@ final class KeyboardController {
             DispatchQueue.main.async {
                 self.lexicons[lang] = lex
                 self.loading.remove(lang)
-                log("PenBridge: keyboard lexicon \(lang.rawValue) loaded, \(lex.words.count) words")
+                log("Touchintosh: keyboard lexicon \(lang.rawValue) loaded, \(lex.words.count) words")
                 // No word list yet (first use): build one from the spell checker, then reload.
                 if lex.words.count < 1000 && !self.generating.contains(lang) {
                     self.generating.insert(lang)
-                    log("PenBridge: building the \(lang.rawValue) word list")
+                    log("Touchintosh: building the \(lang.rawValue) word list")
                     Lexicon.generate(lang.rawValue) { ok in
                         self.generating.remove(lang)
-                        log("PenBridge: \(lang.rawValue) word list \(ok ? "built" : "could not be built")")
+                        log("Touchintosh: \(lang.rawValue) word list \(ok ? "built" : "could not be built")")
                         guard ok else { return }
                         self.lexicons[lang] = nil
                         self.loadLexicon(lang)
@@ -594,7 +594,7 @@ final class KeyboardController {
         modifiers = lockedModifiers
     }
 
-    /// Lets go of every held modifier, before PenBridge quits.
+    /// Lets go of every held modifier, before Touchintosh quits.
     func releaseModifiers() {
         clearModifiers(includingLocked: true)
         shift = .off

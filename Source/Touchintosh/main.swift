@@ -1,4 +1,4 @@
-// PenBridge: gives the Wacom AES pen (WCOM4957, driven by VoodooI2C) real tablet
+// Touchintosh: gives the Wacom AES pen (WCOM4957, driven by VoodooI2C) real tablet
 // behaviour on macOS — pressure, tilt, eraser and proximity — by reading the pen's
 // HID reports and annotating the cursor events VoodooI2C already generates.
 // Settings.swift holds the options, MenuBar.swift the panel, Touch.swift the gestures.
@@ -40,23 +40,23 @@ var pen = PenState()
 var proximityPointerType: Int64 = 0   // 0 = out of proximity, 1 = pen, 3 = eraser
 var leaveTimer: Timer?
 
-// Marks events PenBridge posts itself, so its own event tap never drops them.
+// Marks events Touchintosh posts itself, so its own event tap never drops them.
 let syntheticMarker: Int64 = 0x5045_4E42   // "PENB"
 
 let logHandle: FileHandle? = {
-    let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/PenBridge.log")
+    let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Touchintosh.log")
     if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil) }
     let h = try? FileHandle(forWritingTo: url); h?.seekToEndOfFile(); return h
 }()
 let logTime: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss.SSS"; return f }()
 
-// Pen/annotation chatter only with -v; touch and lifecycle lines always go to ~/Library/Logs/PenBridge.log.
+// Pen/annotation chatter only with -v; touch and lifecycle lines always go to ~/Library/Logs/Touchintosh.log.
 // File writes happen on their own queue so they can never hold up the input thread.
-let logQueue = DispatchQueue(label: "PenBridge.log", qos: .utility)
+let logQueue = DispatchQueue(label: "Touchintosh.log", qos: .utility)
 
 func log(_ s: @autoclosure () -> String) {
     let line = s()
-    if !verbose && !line.hasPrefix("touch") && !line.hasPrefix("PenBridge") { return }
+    if !verbose && !line.hasPrefix("touch") && !line.hasPrefix("Touchintosh") { return }
     let now = Date()
     logQueue.async { logHandle?.write(Data("\(logTime.string(from: now)) \(line)\n".utf8)) }
 }
@@ -161,7 +161,7 @@ func handlePenReport(_ r: UnsafePointer<UInt8>, _ length: Int) {
     if statusChanged { updateProximity() }
 }
 
-// Ends anything the pen is doing, for when PenBridge is paused or the pen is turned off.
+// Ends anything the pen is doing, for when Touchintosh is paused or the pen is turned off.
 func releasePen() {
     flushPenRelease()
     pen.tip = false; pen.barrel = false; pen.eraser = false; pen.invert = false
@@ -434,14 +434,14 @@ if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLi
 // Decided here, before the digitizer is opened, so exiting is safe. The LaunchAgent
 // waits for the lock; a copy opened from the app icon just quits. The lock is released
 // by the kernel when the holder exits.
-let lockPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches/com.oscacace.PenBridge.lock").path
+let lockPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches/com.oscacace.Touchintosh.lock").path
 let lockFD = open(lockPath, O_CREAT | O_RDWR, 0o644)
 if lockFD >= 0 && flock(lockFD, LOCK_EX | LOCK_NB) != 0 {
-    if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.oscacace.penbridge" {
-        log("PenBridge: waiting for another running copy to quit")
+    if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.oscacace.touchintosh" {
+        log("Touchintosh: waiting for another running copy to quit")
         flock(lockFD, LOCK_EX)
     } else {
-        log("PenBridge: already running, this copy is quitting")
+        log("Touchintosh: already running, this copy is quitting")
         logQueue.sync {}
         exit(0)
     }
@@ -469,7 +469,7 @@ func setInputThreadPriority() {
         }
     }
     realtimePolicyOn = result == KERN_SUCCESS
-    log("PenBridge: input thread real-time policy \(realtimePolicyOn ? "on" : "failed (\(result))")")
+    log("Touchintosh: input thread real-time policy \(realtimePolicyOn ? "on" : "failed (\(result))")")
 }
 
 // Hands new settings to the input thread, which owns all input state.
@@ -510,7 +510,7 @@ func refreshSettings() {
     CFRunLoopPerformBlock(loop, CFRunLoopMode.defaultMode.rawValue) {
         panelBounds = display.bounds
         panelRotation = display.rotation
-        if onACPower != ac { log("PenBridge: \(ac ? "charger connected" : "on battery")") }
+        if onACPower != ac { log("Touchintosh: \(ac ? "charger connected" : "on battery")") }
         onACPower = ac
         if !noiseFilterOn { flushPenRelease(); hoverAnchor = nil }
     }
@@ -610,7 +610,7 @@ func startInput() {
         if type == .leftMouseUp { leftButtonDown = false }
         return Unmanaged.passUnretained(ev)
     }, userInfo: nil) else {
-        print("PenBridge: cannot create the event tap. Grant Accessibility in System Settings → Privacy & Security.")
+        print("Touchintosh: cannot create the event tap. Grant Accessibility in System Settings → Privacy & Security.")
         exit(1)
     }
     tapPort = tap
@@ -636,7 +636,7 @@ func startInput() {
     IOHIDManagerScheduleWithRunLoop(hid, loop, CFRunLoopMode.defaultMode.rawValue)
     let openResult = IOHIDManagerOpen(hid, IOOptionBits(kIOHIDOptionsTypeNone))
     if openResult != kIOReturnSuccess {
-        log(String(format: "PenBridge: cannot open the digitizer (0x%08X)", openResult))
+        log(String(format: "Touchintosh: cannot open the digitizer (0x%08X)", openResult))
     }
 }
 
@@ -648,7 +648,7 @@ let inputThread = Thread {
     var prompted = false
     while !(CGPreflightListenEventAccess() && AXIsProcessTrusted()) {
         if !prompted {
-            log("PenBridge: waiting for Input Monitoring and Accessibility permission")
+            log("Touchintosh: waiting for Input Monitoring and Accessibility permission")
             if !CGPreflightListenEventAccess() { CGRequestListenEventAccess() }
             if !AXIsProcessTrusted() { AXIsProcessTrustedWithOptions(accessibilityPrompt) }
             prompted = true
@@ -658,14 +658,14 @@ let inputThread = Thread {
     hasPermissions = true
     setInputThreadPriority()
     startInput()
-    print("PenBridge running")
-    log("PenBridge started")
+    print("Touchintosh running")
+    log("Touchintosh started")
     // Bounded runs so autoreleased objects get drained on this secondary thread.
     while true {
         autoreleasepool { _ = CFRunLoopRunInMode(.defaultMode, 1, false) }
     }
 }
-inputThread.name = "PenBridge input"
+inputThread.name = "Touchintosh input"
 inputThread.qualityOfService = .userInteractive
 inputThread.start()
 
@@ -678,8 +678,8 @@ penKeys.onTop = { topButtonPressed($0) }
 watchFrontApp()
 penKeys.start()
 FocusWatcher.shared.start()
-// Scripts can drive the keyboard: post "com.oscacace.PenBridge.keyboard" with show, hide or toggle.
-DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.oscacace.PenBridge.keyboard"),
+// Scripts can drive the keyboard: post "com.oscacace.Touchintosh.keyboard" with show, hide or toggle.
+DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.oscacace.Touchintosh.keyboard"),
                                                     object: nil, queue: .main) { note in
     let kb = KeyboardController.shared
     switch note.object as? String {
@@ -696,7 +696,7 @@ DistributedNotificationCenter.default().addObserver(forName: Notification.Name("
     default: kb.toggle()
     }
 }
-// Stopping PenBridge (launchctl, logout) must not leave ⌘ ⌥ ⌃ held down system-wide.
+// Stopping Touchintosh (launchctl, logout) must not leave ⌘ ⌥ ⌃ held down system-wide.
 signal(SIGTERM, SIG_IGN)
 let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 termSource.setEventHandler { KeyboardController.shared.releaseModifiers(); exit(0) }

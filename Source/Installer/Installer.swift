@@ -1,4 +1,4 @@
-// PenBridge Installer: checks the laptop, installs PenBridge (no admin needed), and
+// Touchintosh Installer: checks the laptop, installs Touchintosh (no admin needed), and
 // optionally patches the touchscreen driver in the OpenCore EFI through Driver/pentool.sh
 // (admin password). When something doesn't match, "Copy for Claude" writes a prompt
 // with this machine's details so Claude Code can adapt the installer (see CLAUDE.md).
@@ -8,12 +8,18 @@ import IOKit.kext
 import SwiftUI
 
 let penVendorID = 0x056A, penProductID = 0x4957
-let agentLabel = "com.oscacace.penbridge"
+let agentLabel = "com.oscacace.touchintosh"
 let home = FileManager.default.homeDirectoryForCurrentUser
-let appDestination = home.appendingPathComponent("Applications/PenBridge.app")
+let appDestination = home.appendingPathComponent("Applications/Touchintosh.app")
 let agentPath = home.appendingPathComponent("Library/LaunchAgents/\(agentLabel).plist")
-let penLog = home.appendingPathComponent("Library/Logs/PenBridge.log")
-let backupDir = home.appendingPathComponent("Library/Application Support/PenBridge/EFI-Backups")
+let penLog = home.appendingPathComponent("Library/Logs/Touchintosh.log")
+// Backups made while the project was called PenBridge stay where they are: their "original"
+// and "latest" links point inside that folder, and Restore Original needs them.
+let legacyBackupDir = home.appendingPathComponent("Library/Application Support/PenBridge/EFI-Backups")
+let backupDir = FileManager.default.fileExists(atPath: legacyBackupDir.path)
+    ? legacyBackupDir : home.appendingPathComponent("Library/Application Support/Touchintosh/EFI-Backups")
+let legacyAgentLabel = "com.oscacace.penbridge"
+let legacyApp = home.appendingPathComponent("Applications/PenBridge.app")
 
 /// The folder that holds this app. Driver files next to the app win over the bundled
 /// copies, so Claude can adapt them without rebuilding.
@@ -121,7 +127,7 @@ enum Step: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .check: return "Check this Mac"
-        case .penBridge: return "Install PenBridge"
+        case .penBridge: return "Install Touchintosh"
         case .driver: return "Touchscreen driver"
         case .permissions: return "Permissions"
         case .finish: return "Finish"
@@ -156,11 +162,11 @@ final class InstallerModel: ObservableObject {
 
     init() {
         runChecks()
-        refreshPenBridge()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshPenBridge() }
+        refreshTouchintosh()
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshTouchintosh() }
     }
 
-    var canInstallPenBridge: Bool { !checks.contains { $0.state == .fail && $0.id != "driver" } }
+    var canInstallTouchintosh: Bool { !checks.contains { $0.state == .fail && $0.id != "driver" } }
 
     func runChecks() {
         var list: [Check] = []
@@ -172,10 +178,10 @@ final class InstallerModel: ObservableObject {
         var arm: Int32 = 0
         sysctlbyname("hw.optional.arm64", &arm, &size, nil, 0)
         list.append(Check(id: "intel", title: "Intel processor", state: arm == 1 ? .fail : .ok,
-                          detail: arm == 1 ? "This is an Apple silicon Mac; PenBridge is for Intel hackintoshes." : "x86_64"))
+                          detail: arm == 1 ? "This is an Apple silicon Mac; Touchintosh is for Intel hackintoshes." : "x86_64"))
         let oc = openCoreVersion()
         list.append(Check(id: "opencore", title: "Booted with OpenCore", state: oc == nil ? .warn : .ok,
-                          detail: oc ?? "No OpenCore version found in NVRAM. PenBridge can still work; the driver step needs OpenCore."))
+                          detail: oc ?? "No OpenCore version found in NVRAM. Touchintosh can still work; the driver step needs OpenCore."))
         let i2c = loadedKextVersion("com.alexandred.VoodooI2C")
         let hid = loadedKextVersion("com.alexandred.VoodooI2CHID")
         list.append(Check(id: "voodoo", title: "VoodooI2C loaded", state: i2c != nil && hid != nil ? .ok : .fail,
@@ -187,39 +193,43 @@ final class InstallerModel: ObservableObject {
         list.append(Check(id: "digitizer", title: "Wacom AES touchscreen (056A:4957)", state: digitizer.found ? .ok : .fail,
                           detail: digitizer.found ? "Found on I2C." : other.isEmpty ? "No Wacom touchscreen found." : "Found a different Wacom device: \(other). Use the Claude helper."))
         list.append(Check(id: "pci", title: "Touchscreen controller located", state: digitizer.pciPath != nil ? .ok : .warn,
-                          detail: digitizer.pciPath ?? "Couldn't work out its PCI path. PenBridge works without it; the driver step needs it."))
+                          detail: digitizer.pciPath ?? "Couldn't work out its PCI path. Touchintosh works without it; the driver step needs it."))
         checks = list
     }
 
-    func refreshPenBridge() {
+    func refreshTouchintosh() {
         penBridgeInstalled = FileManager.default.fileExists(atPath: appDestination.path)
-        penBridgeRunning = run("/usr/bin/pgrep", ["-f", "PenBridge.app/Contents/MacOS/PenBridge"]).status == 0
-        // PenBridge logs "started" only once it has both permissions.
+        penBridgeRunning = run("/usr/bin/pgrep", ["-f", "Touchintosh.app/Contents/MacOS/Touchintosh"]).status == 0
+        // Touchintosh logs "started" only once it has both permissions.
         if let text = try? String(contentsOf: penLog, encoding: .utf8) {
             let lines = text.split(separator: "\n").suffix(400)
-            let last = lines.last { $0.contains("PenBridge started") || $0.contains("waiting for Input Monitoring") }
-            permissionsGranted = penBridgeRunning && (last?.contains("PenBridge started") ?? false)
+            let last = lines.last { $0.contains("Touchintosh started") || $0.contains("waiting for Input Monitoring") }
+            permissionsGranted = penBridgeRunning && (last?.contains("Touchintosh started") ?? false)
         } else {
             permissionsGranted = false
         }
     }
 
-    // MARK: PenBridge
+    // MARK: Touchintosh
 
-    func installPenBridge() {
+    func installTouchintosh() {
         message = nil
         let fm = FileManager.default
-        let source = Bundle.main.resourceURL!.appendingPathComponent("PenBridge.app")
+        let source = Bundle.main.resourceURL!.appendingPathComponent("Touchintosh.app")
         do {
+            // Replace a PenBridge install (Touchintosh's old name) so both never run at once.
+            _ = run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(legacyAgentLabel)"])
+            try? fm.removeItem(at: home.appendingPathComponent("Library/LaunchAgents/\(legacyAgentLabel).plist"))
+            try? fm.removeItem(at: legacyApp)
             _ = run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(agentLabel)"])
             try fm.createDirectory(at: appDestination.deletingLastPathComponent(), withIntermediateDirectories: true)
             if fm.fileExists(atPath: appDestination.path) { try fm.removeItem(at: appDestination) }
             let copy = run("/usr/bin/ditto", [source.path, appDestination.path])
-            guard copy.status == 0 else { throw NSError(domain: "PenBridge", code: 1, userInfo: [NSLocalizedDescriptionKey: copy.output]) }
+            guard copy.status == 0 else { throw NSError(domain: "Touchintosh", code: 1, userInfo: [NSLocalizedDescriptionKey: copy.output]) }
             _ = run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", appDestination.path])
             let agent: [String: Any] = [
                 "Label": agentLabel,
-                "ProgramArguments": [appDestination.appendingPathComponent("Contents/MacOS/PenBridge").path],
+                "ProgramArguments": [appDestination.appendingPathComponent("Contents/MacOS/Touchintosh").path],
                 "RunAtLoad": true,
                 "KeepAlive": true,
                 "ThrottleInterval": 15,
@@ -229,22 +239,22 @@ final class InstallerModel: ObservableObject {
             let data = try PropertyListSerialization.data(fromPropertyList: agent, format: .xml, options: 0)
             try data.write(to: agentPath)
             let boot = run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", agentPath.path])
-            guard boot.status == 0 else { throw NSError(domain: "PenBridge", code: 2, userInfo: [NSLocalizedDescriptionKey: "launchctl: \(boot.output)"]) }
+            guard boot.status == 0 else { throw NSError(domain: "Touchintosh", code: 2, userInfo: [NSLocalizedDescriptionKey: "launchctl: \(boot.output)"]) }
             _ = run("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
                     ["-f", appDestination.path])
-            message = "PenBridge is installed and starts at login."
+            message = "Touchintosh is installed and starts at login."
         } catch {
             message = "Install failed: \(error.localizedDescription)"
         }
-        refreshPenBridge()
+        refreshTouchintosh()
     }
 
-    func uninstallPenBridge() {
+    func uninstallTouchintosh() {
         _ = run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(agentLabel)"])
         try? FileManager.default.removeItem(at: agentPath)
         try? FileManager.default.removeItem(at: appDestination)
-        message = "PenBridge was removed. Its settings stay in case you reinstall."
-        refreshPenBridge()
+        message = "Touchintosh was removed. Its settings stay in case you reinstall."
+        refreshTouchintosh()
     }
 
     // MARK: Driver (admin)
@@ -285,7 +295,7 @@ final class InstallerModel: ObservableObject {
 
     func copyForClaude() {
         var text = """
-        I'm setting up PenBridge (pen and touchscreen support) on my hackintosh with the PenBridge Installer.
+        I'm setting up Touchintosh (pen and touchscreen support) on my hackintosh with the Touchintosh Installer.
         The installer folder is: \(packageFolder.path)
         Read CLAUDE.md in that folder first and follow it. Don't change anything in my EFI without asking me first.
 
@@ -301,7 +311,7 @@ final class InstallerModel: ObservableObject {
             for (k, v) in driverInfo.sorted(by: { $0.key < $1.key }) { text += "  \(k)=\(v)\n" }
         }
         if !driverLog.isEmpty { text += "\nLast driver tool output:\n" + driverLog.map { "  \($0)" }.joined(separator: "\n") + "\n" }
-        text += "\nPlease work out what's different on this laptop and adapt the installer (Driver/patches.conf, Driver/pentool.sh or the PenBridge source) so it works here. Explain what you'll change before you change it."
+        text += "\nPlease work out what's different on this laptop and adapt the installer (Driver/patches.conf, Driver/pentool.sh or the Touchintosh source) so it works here. Explain what you'll change before you change it."
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         copiedForClaude = true
@@ -339,7 +349,7 @@ struct InstallerView: View {
             HStack(spacing: 8) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 36, height: 36)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("PenBridge").font(.headline)
+                    Text("Touchintosh").font(.headline)
                     Text("Installer").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -365,7 +375,7 @@ struct InstallerView: View {
     @ViewBuilder private var content: some View {
         switch model.step {
         case .check: CheckStep(model: model)
-        case .penBridge: PenBridgeStep(model: model)
+        case .penBridge: TouchintoshStep(model: model)
         case .driver: DriverStep(model: model)
         case .permissions: PermissionsStep(model: model)
         case .finish: FinishStep(model: model)
@@ -424,10 +434,10 @@ struct StatusIcon: View {
 struct CheckStep: View {
     @ObservedObject var model: InstallerModel
     var body: some View {
-        Text("PenBridge is made for the Dell Latitude 7410 2-in-1 running macOS with OpenCore and VoodooI2C. These checks show whether this laptop matches.")
+        Text("Touchintosh is made for the Dell Latitude 7410 2-in-1 running macOS with OpenCore and VoodooI2C. These checks show whether this laptop matches.")
             .fixedSize(horizontal: false, vertical: true)
         if isTranslocated {
-            Label("macOS is running this app from a temporary copy, so files next to it can't be read. Move the PenBridge Installer folder somewhere else (like Documents) and open it again.", systemImage: "exclamationmark.triangle")
+            Label("macOS is running this app from a temporary copy, so files next to it can't be read. Move the Touchintosh Installer folder somewhere else (like Documents) and open it again.", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
         }
         VStack(spacing: 0) {
@@ -455,24 +465,24 @@ struct CheckStep: View {
     }
 }
 
-struct PenBridgeStep: View {
+struct TouchintoshStep: View {
     @ObservedObject var model: InstallerModel
     var body: some View {
-        Text("PenBridge is a small menu bar app. It adds pen pressure, tilt, the eraser, configurable pen buttons and touchscreen gestures. It installs into your user's Applications folder and starts at login. No administrator password is needed.")
+        Text("Touchintosh is a small menu bar app. It adds pen pressure, tilt, the eraser, configurable pen buttons and touchscreen gestures. It installs into your user's Applications folder and starts at login. No administrator password is needed.")
             .fixedSize(horizontal: false, vertical: true)
         HStack(spacing: 10) {
             StatusIcon(state: model.penBridgeRunning ? .ok : model.penBridgeInstalled ? .warn : .unknown)
             Text(model.penBridgeRunning ? "Installed and running" : model.penBridgeInstalled ? "Installed, not running" : "Not installed")
         }
         HStack {
-            Button(model.penBridgeInstalled ? "Reinstall PenBridge" : "Install PenBridge") { model.installPenBridge() }
+            Button(model.penBridgeInstalled ? "Reinstall Touchintosh" : "Install Touchintosh") { model.installTouchintosh() }
                 .controlSize(.large)
-                .disabled(!model.canInstallPenBridge)
+                .disabled(!model.canInstallTouchintosh)
             if model.penBridgeInstalled {
-                Button("Uninstall", role: .destructive) { model.uninstallPenBridge() }
+                Button("Uninstall", role: .destructive) { model.uninstallTouchintosh() }
             }
         }
-        if !model.canInstallPenBridge {
+        if !model.canInstallTouchintosh {
             Text("Fix the failed checks first, or use the Claude helper.").foregroundStyle(.red)
         }
     }
@@ -563,7 +573,7 @@ struct DriverStep: View {
 struct PermissionsStep: View {
     @ObservedObject var model: InstallerModel
     var body: some View {
-        Text("PenBridge needs two permissions. macOS will ask for them when PenBridge starts; if you missed the prompts, turn PenBridge on in both lists:")
+        Text("Touchintosh needs two permissions. macOS will ask for them when Touchintosh starts; if you missed the prompts, turn Touchintosh on in both lists:")
             .fixedSize(horizontal: false, vertical: true)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -581,10 +591,10 @@ struct PermissionsStep: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
         HStack(spacing: 10) {
             StatusIcon(state: model.permissionsGranted ? .ok : .warn)
-            Text(model.permissionsGranted ? "PenBridge has both permissions and is running." :
-                    model.penBridgeRunning ? "Waiting for permissions…" : "PenBridge isn't running yet. Install it first.")
+            Text(model.permissionsGranted ? "Touchintosh has both permissions and is running." :
+                    model.penBridgeRunning ? "Waiting for permissions…" : "Touchintosh isn't running yet. Install it first.")
         }
-        Text("The Input Monitoring prompt says the app can record keystrokes. PenBridge only reads the pen, touchscreen and its own Bluetooth pen button; it doesn't log or send what you type.")
+        Text("The Input Monitoring prompt says the app can record keystrokes. Touchintosh only reads the pen, touchscreen and its own Bluetooth pen button; it doesn't log or send what you type.")
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 
@@ -599,7 +609,7 @@ struct FinishStep: View {
     @ObservedObject var model: InstallerModel
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            summary("PenBridge installed and running", model.penBridgeRunning ? .ok : .warn)
+            summary("Touchintosh installed and running", model.penBridgeRunning ? .ok : .warn)
             summary("Permissions granted", model.permissionsGranted ? .ok : .warn)
             summary(model.driverInstalledThisRun ? "Driver changed - restart to use it" : "Driver unchanged in this session",
                     model.driverInstalledThisRun ? .warn : .unknown)
@@ -625,7 +635,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 540),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "PenBridge Installer"
+        window.title = "Touchintosh Installer"
         window.contentView = NSHostingView(rootView: InstallerView(model: InstallerModel()))
         window.center()
         window.makeKeyAndOrderFront(nil)

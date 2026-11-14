@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0: PenBridge is now Touchintosh
+
+- New name and icon (several other projects were already called PenBridge).
+- Your settings, learned keyboard words and EFI backups carry over automatically. The
+  installer replaces an existing PenBridge install, so the two never run at once.
+- macOS asks for Input Monitoring and Accessibility again, because it sees a new app.
+
 ## 2.2.1
 
 - The menu bar keyboard icon now turns automatic showing on or off (filled when on), so the

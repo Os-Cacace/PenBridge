@@ -79,7 +79,7 @@ final class ButtonTest: ObservableObject {
         results = [:]
         select(.lowerHover)
         buttonTestActive = true
-        log("PenBridge buttontest: started")
+        log("Touchintosh buttontest: started")
     }
 
     func stop() {
@@ -93,7 +93,7 @@ final class ButtonTest: ObservableObject {
         seenBits = 0
         chords = []
         heard = ""
-        if s == nil { log("PenBridge buttontest: finished") }
+        if s == nil { log("Touchintosh buttontest: finished") }
     }
 
     func skip() {
@@ -125,7 +125,7 @@ final class ButtonTest: ObservableObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.step == s else { return }
             self.results[s] = self.heard
-            log("PenBridge buttontest \(s.title): \(self.heard)")
+            log("Touchintosh buttontest \(s.title): \(self.heard)")
             self.select(TestStep.allCases.first { $0.rawValue > s.rawValue && self.results[$0] == nil })
         }
         advance = work
@@ -150,16 +150,16 @@ final class PenKeyListener {
             Unmanaged<PenKeyListener>.fromOpaque(context!).takeUnretainedValue().handle(value)
         }, context)
         IOHIDManagerRegisterDeviceMatchingCallback(manager, { _, _, _, _ in
-            log("PenBridge: pen Bluetooth buttons connected")
+            log("Touchintosh: pen Bluetooth buttons connected")
             buttonTest.bluetoothConnected = true
         }, nil)
         IOHIDManagerRegisterDeviceRemovalCallback(manager, { _, _, _, _ in
-            log("PenBridge: pen Bluetooth buttons disconnected")
+            log("Touchintosh: pen Bluetooth buttons disconnected")
             buttonTest.bluetoothConnected = false
         }, nil)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        if result != kIOReturnSuccess { log("PenBridge: pen Bluetooth listener failed to open (\(result))") }
+        if result != kIOReturnSuccess { log("Touchintosh: pen Bluetooth listener failed to open (\(result))") }
     }
 
     private func handle(_ value: IOHIDValue) {
@@ -168,7 +168,7 @@ final class PenKeyListener {
         let pressed = IOHIDValueGetIntegerValue(value) != 0
         // Keyboard arrays report "no key" and rollover codes; neither is a button.
         guard usage != 0, usage != 0xFFFF_FFFF, !(page == 0x07 && usage <= 3) else { return }
-        log("PenBridge pen key page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) \(pressed ? "down" : "up")")
+        log("Touchintosh pen key page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) \(pressed ? "down" : "up")")
         if page == 0x07 && (0xE0...0xE7).contains(usage) {
             if pressed { modifiers.insert(usage) } else { modifiers.remove(usage) }
             return

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# PenBridge driver tool: patches VoodooI2CHID in the OpenCore EFI for smooth pen input,
+# Touchintosh driver tool: patches VoodooI2CHID in the OpenCore EFI for smooth pen input,
 # turns on touchscreen polling, and can undo both. See CLAUDE.md before changing anything.
 #
 #   pentool.sh selftest <VoodooI2CHID.kext>                  no root, no EFI: patches a temp copy

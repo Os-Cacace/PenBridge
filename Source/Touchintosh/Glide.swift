@@ -47,7 +47,7 @@ final class Lexicon {
     init(language: String) {
         arabic = language == "ar"
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PenBridge", isDirectory: true)
+            .appendingPathComponent("Touchintosh", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         learnedURL = support.appendingPathComponent("learned-\(language).txt")
 
@@ -95,11 +95,11 @@ final class Lexicon {
     /// Where the word list built on this Mac lives.
     static func generatedURL(_ language: String) -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PenBridge/lexicon-\(language).txt")
+            .appendingPathComponent("Touchintosh/lexicon-\(language).txt")
     }
 
     /// The word lists come from the macOS spell checker on the user's own Mac, so none of
-    /// Apple's data ships with PenBridge. Runs the bundled lexgen helper (a minute or two)
+    /// Apple's data ships with Touchintosh. Runs the bundled lexgen helper (a minute or two)
     /// and calls done on the main thread when the list is in place.
     static func generate(_ language: String, done: @escaping (Bool) -> Void) {
         guard let tool = Bundle.main.url(forAuxiliaryExecutable: "lexgen") else { done(false); return }

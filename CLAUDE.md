@@ -1,6 +1,6 @@
-# PenBridge Installer: guide for Claude Code
+# Touchintosh Installer: guide for Claude Code
 
-You're helping someone install PenBridge on their own hackintosh, usually because the
+You're helping someone install Touchintosh on their own hackintosh, usually because the
 installer's checks failed and they pasted its "Copy for Claude" report. Read this file
 fully before changing anything.
 
@@ -21,14 +21,14 @@ fully before changing anything.
 
 | Path | What it is |
 |---|---|
-| `PenBridge Installer.app` | SwiftUI installer. Reads `Driver/` next to the app first, else its bundled copy, so editing `Driver/*` needs no rebuild |
+| `Touchintosh Installer.app` | SwiftUI installer. Reads `Driver/` next to the app first, else its bundled copy, so editing `Driver/*` needs no rebuild |
 | `Driver/pentool.sh` | Root tool: `selftest`, `diagnose`, `install`, `restore` (usage at the top of the file) |
 | `Driver/patches.conf` | VoodooI2CHID patch table, one `build` block per supported original binary |
-| `Source/PenBridge/` | PenBridge source (Swift, AppKit + SwiftUI, no Xcode project) |
+| `Source/Touchintosh/` | Touchintosh source (Swift, AppKit + SwiftUI, no Xcode project) |
 | `Source/Installer/Installer.swift` | The installer app |
 | `Source/build.sh` | Rebuilds both apps and the zip. Needs Command Line Tools (`xcode-select --install`) |
 
-Backups go to `~/Library/Application Support/PenBridge/EFI-Backups/`: `EFI-<date>/OC` per
+Backups go to `~/Library/Application Support/Touchintosh/EFI-Backups/`: `EFI-<date>/OC` per
 install, `latest` → the newest, `original` → the first backup taken before any patch.
 `restore` copies VoodooI2CHID.kext, VoodooI2C's Info.plist and config.plist back from `original`.
 
@@ -108,9 +108,9 @@ Measured result on the reference machine: pen ~300 reports/s, idle kernel_task ~
 If the build is very different, it's fine to ship only the polling change (step 1, which
 is config-only) and skip binary patches, and say so.
 
-## Porting PenBridge to a different digitizer
+## Porting Touchintosh to a different digitizer
 
-PenBridge decodes raw HID reports. On the reference machine:
+Touchintosh decodes raw HID reports. On the reference machine:
 - `main.swift`: `vendorID = 0x056A`, `productID = 0x4957`, pen report ID 6 (18 bytes:
   [1] bits tip 0x01, barrel 0x02, eraser 0x04, invert 0x08, in range 0x20; [2..3] X,
   [4..5] Y, [6..7] pressure 0-4095, [16]/[17] tilt X/Y in signed degrees),
@@ -124,10 +124,10 @@ shows `ReportDescriptor`), then rebuild with `zsh Source/build.sh`.
 ## Rules learned the hard way (keep them)
 
 - Never open the digitizer and then exit. A permission-failure restart loop wedged the
-  kernel HID connection until reboot, so PenBridge waits for permissions before opening.
+  kernel HID connection until reboot, so Touchintosh waits for permissions before opening.
 - `IOHIDDeviceGetValue` and element value callbacks hang on the VoodooI2C device. Read raw reports.
 - Never drop a `leftMouseUp` in the event tap; every gesture begin needs an end.
-- Don't run `sample` on PenBridge (it stalled the event tap).
+- Don't run `sample` on Touchintosh (it stalled the event tap).
 - The Input Monitoring prompt reads as keystroke recording. Warn the user before anything
   triggers it.
 - GPIO interrupt patches to VoodooGPIO (routing bits, parent IOAPIC disable) did not fix

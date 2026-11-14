@@ -13,7 +13,7 @@ func load(_ path: String) -> NSImage {
     return image
 }
 
-let icon = load("Source/PenBridge/icon/AppIcon-1024.png")
+let icon = load("Source/Touchintosh/icon/AppIcon-1024.png")
 let shots = [load("docs/images/panel-Pen.png"), load("docs/images/panel-Buttons.png")]
 
 let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
@@ -40,12 +40,12 @@ func text(_ s: String, _ font: NSFont, _ color: NSColor, at p: NSPoint, width: C
     let h = ceil(a.boundingRect(with: NSSize(width: width, height: 1000), options: [.usesLineFragmentOrigin]).height)
     a.draw(with: NSRect(x: p.x, y: p.y - h, width: width, height: h), options: [.usesLineFragmentOrigin])
 }
-text("PenBridge", .systemFont(ofSize: 76, weight: .bold), .white, at: NSPoint(x: 76, y: 440))
-text("Pen pressure, tilt, configurable pen buttons and touch gestures for Hackintosh touchscreens.",
+text("Touchintosh", .systemFont(ofSize: 76, weight: .bold), .white, at: NSPoint(x: 76, y: 440))
+text("Pen pressure and tilt, touch gestures and an on-screen keyboard for Hackintosh touchscreens.",
      .systemFont(ofSize: 26, weight: .regular), NSColor(white: 1, alpha: 0.78), at: NSPoint(x: 80, y: 330), width: 560)
 
 var x: CGFloat = 80, y: CGFloat = 170
-for chip in ["Pressure & tilt", "Per-app pen buttons", "Touch gestures", "Guided installer", "Claude helper"] {
+for chip in ["Pressure & tilt", "Per-app pen buttons", "Touch gestures", "On-screen keyboard", "Guided installer", "Claude helper"] {
     let font = NSFont.systemFont(ofSize: 17, weight: .semibold)
     let w = (chip as NSString).size(withAttributes: [.font: font]).width + 28
     if x + w > 660 { x = 80; y -= 46 }

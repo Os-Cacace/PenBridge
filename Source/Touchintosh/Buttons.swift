@@ -4,7 +4,7 @@
 import AppKit
 import SwiftUI
 
-/// The app in front, ignoring PenBridge itself so opening the panel doesn't change it. Main thread.
+/// The app in front, ignoring Touchintosh itself so opening the panel doesn't change it. Main thread.
 var frontBundleID: String?
 
 func watchFrontApp() {
@@ -32,7 +32,7 @@ func topButtonPressed(_ button: PenButton) {
 
 /// Runs a press action. Main thread. Scroll and Eraser are held actions handled on the input thread.
 func performButtonAction(_ binding: ButtonBinding) {
-    log("PenBridge: button action \(binding.action.rawValue)")
+    log("Touchintosh: button action \(binding.action.rawValue)")
     // Mission Control only takes ⌃-arrows that carry the fn and keypad flags a real arrow key has.
     let arrow: CGEventFlags = [.maskControl, .maskSecondaryFn, .maskNumericPad]
     switch binding.action {

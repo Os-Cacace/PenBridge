@@ -1,6 +1,6 @@
 ---
 name: Works on my laptop / doesn't work on my laptop
-about: Report a laptop PenBridge was tested on, or a mismatch the installer found
+about: Report a laptop Touchintosh was tested on, or a mismatch the installer found
 labels: compatibility
 ---
 

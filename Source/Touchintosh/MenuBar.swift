@@ -1,4 +1,4 @@
-// MenuBar: the top bar icon and its panel, which holds every PenBridge setting.
+// MenuBar: the top bar icon and its panel, which holds every Touchintosh setting.
 // Runs on the main thread. Input handling stays on its own thread and only ever
 // receives finished Config values through pushConfig.
 import AppKit
@@ -81,11 +81,11 @@ final class MenuBarController: NSObject, NSWindowDelegate {
 
     private func updateIcon() {
         let name = model.c.paused ? "pencil.slash" : model.eraserLatched ? "eraser" : "pencil.tip"
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: "PenBridge")
-            ?? NSImage(systemSymbolName: "pencil", accessibilityDescription: "PenBridge")
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: "Touchintosh")
+            ?? NSImage(systemSymbolName: "pencil", accessibilityDescription: "Touchintosh")
         image?.isTemplate = true
         item.button?.image = image
-        item.button?.toolTip = model.c.paused ? "PenBridge is paused" : model.eraserLatched ? "PenBridge: eraser on" : "PenBridge"
+        item.button?.toolTip = model.c.paused ? "Touchintosh is paused" : model.eraserLatched ? "Touchintosh: eraser on" : "Touchintosh"
     }
 
     private var keyboardItem: NSStatusItem?
@@ -271,7 +271,7 @@ struct PanelView: View {
                 .foregroundStyle(model.c.paused ? Color.secondary : Color.accentColor)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 0) {
-                Text("PenBridge").font(.headline)
+                Text("Touchintosh").font(.headline)
                 Text(model.c.paused ? "Paused: pen and touch are plain mouse input" : "Running")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -285,11 +285,11 @@ struct PanelView: View {
             .buttonStyle(.borderless)
             .help(model.pinned ? "Let this panel close when you click away" : "Keep this panel open while you test in another app")
             .accessibilityLabel(model.pinned ? "Unpin panel" : "Pin panel")
-            Toggle("Pause PenBridge", isOn: Binding(get: { !model.c.paused }, set: { model.c.paused = !$0 }))
+            Toggle("Pause Touchintosh", isOn: Binding(get: { !model.c.paused }, set: { model.c.paused = !$0 }))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .help(model.c.paused ? "Resume PenBridge" : "Pause PenBridge")
+                .help(model.c.paused ? "Resume Touchintosh" : "Pause Touchintosh")
             Button {
                 model.onClose?()
             } label: {
@@ -505,7 +505,7 @@ struct TouchTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("PenBridge touch features", isOn: $model.c.touchEnabled)
+                Toggle("Touchintosh touch features", isOn: $model.c.touchEnabled)
             } footer: {
                 Text("Off leaves only VoodooI2C's basic tap and drag.")
             }
@@ -645,7 +645,7 @@ struct StatusTab: View {
         Form {
             if !box.value.hasPermissions {
                 Section("Permissions needed") {
-                    Text("PenBridge needs Input Monitoring and Accessibility before it can start.")
+                    Text("Touchintosh needs Input Monitoring and Accessibility before it can start.")
                     Button("Open Input Monitoring") { openPrivacy("Privacy_ListenEvent") }
                     Button("Open Accessibility") { openPrivacy("Privacy_Accessibility") }
                 }
@@ -667,16 +667,16 @@ struct StatusTab: View {
                 LabeledContent("Slowest 5%", value: String(format: "%.1f ms", box.value.delayP95))
                 LabeledContent("High-priority input", value: box.value.realtime ? "On" : "Off")
             } header: {
-                Text("Delay reaching PenBridge")
+                Text("Delay reaching Touchintosh")
             } footer: {
-                Text("Measured while this panel is open, from the driver to PenBridge. Drawing on screen adds more that isn't counted here.")
+                Text("Measured while this panel is open, from the driver to Touchintosh. Drawing on screen adds more that isn't counted here.")
             }
             Section("Maintenance") {
                 Toggle("Detailed log", isOn: $model.c.verboseLog)
                 Button("Open Log") {
-                    NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/PenBridge.log"))
+                    NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Touchintosh.log"))
                 }
-                Button("Restart PenBridge") { restartPenBridge() }
+                Button("Restart Touchintosh") { restartTouchintosh() }
                 if confirmingReset {
                     HStack {
                         Text("Reset every setting?")
@@ -698,10 +698,10 @@ struct StatusTab: View {
     }
 
     // launchd restarts it; a plain exit could wait out the agent's restart throttle.
-    private func restartPenBridge() {
+    private func restartTouchintosh() {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        task.arguments = ["kickstart", "-k", "gui/\(getuid())/com.oscacace.penbridge"]
+        task.arguments = ["kickstart", "-k", "gui/\(getuid())/com.oscacace.touchintosh"]
         try? task.run()
     }
 }
