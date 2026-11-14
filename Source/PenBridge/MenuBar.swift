@@ -65,12 +65,16 @@ final class MenuBarController: NSObject, NSWindowDelegate {
         buildPanel()
         item.button?.target = self
         item.button?.action = #selector(toggle)
-        model.onChange = { [weak self] in self?.updateIcon() }
+        model.onChange = { [weak self] in
+            self?.updateIcon(); self?.updateKeyboardItem()
+            KeyboardController.shared.settingsChanged()
+        }
         model.onClose = { [weak self] in self?.closePanel() }
         // Rotating the screen or plugging in a display moves the usable area.
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         updateIcon()
+        updateKeyboardItem()
         // The input thread hasn't published anything yet, so show its permission state now.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { model.live.hasPermissions = hasPermissions }
     }
@@ -83,6 +87,28 @@ final class MenuBarController: NSObject, NSWindowDelegate {
         item.button?.image = image
         item.button?.toolTip = model.c.paused ? "PenBridge is paused" : model.eraserLatched ? "PenBridge: eraser on" : "PenBridge"
     }
+
+    private var keyboardItem: NSStatusItem?
+
+    /// A menu bar button that shows and hides the on-screen keyboard with one tap.
+    private func updateKeyboardItem() {
+        if model.c.keyboardMenuIcon {
+            guard keyboardItem == nil else { return }
+            let k = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "On-screen keyboard")
+            image?.isTemplate = true
+            k.button?.image = image
+            k.button?.toolTip = "Show or hide the on-screen keyboard"
+            k.button?.target = self
+            k.button?.action = #selector(toggleKeyboard)
+            keyboardItem = k
+        } else if let k = keyboardItem {
+            NSStatusBar.system.removeStatusItem(k)
+            keyboardItem = nil
+        }
+    }
+
+    @objc private func toggleKeyboard() { KeyboardController.shared.toggle() }
 
     func showPanel() {
         if !panel.isVisible { openPanel() }
@@ -346,6 +372,18 @@ struct PenTab: View {
                 Toggle("Report tilt to apps", isOn: $model.c.tiltEnabled)
             }
 
+            Section("Charger noise") {
+                Picker("Noise filter", selection: $model.c.noiseFilter) {
+                    ForEach(NoiseFilterMode.allCases) { Text($0.title).tag($0) }
+                }
+                if model.c.noiseFilter != .off {
+                    SliderRow(title: "Ignore lifts shorter than", value: $model.c.noiseLiftGap, range: 0.01...0.12, format: secondsFormat,
+                              note: "Stops the pen clicking on its own. Raise it if strokes still break; lower it if quick double taps get lost.")
+                    SliderRow(title: "Hover steadiness", value: $model.c.noiseHover, range: 0...8, format: { String(format: "%.1f pt", $0) },
+                              note: "The pointer ignores hover shake smaller than this.")
+                }
+            }
+
             Section("Palm rejection") {
                 Toggle("Ignore touch while using the pen", isOn: $model.c.palmRejection)
                 if model.c.palmRejection {
@@ -450,6 +488,27 @@ struct TouchTab: View {
             } footer: {
                 Text("Off leaves only VoodooI2C's basic tap and drag.")
             }
+            Section {
+                Button(KeyboardController.shared.visible ? "Hide keyboard" : "Show keyboard") {
+                    KeyboardController.shared.toggle()
+                }
+                Picker("Show automatically", selection: $model.c.keyboardShow) {
+                    ForEach(KeyboardShowMode.allCases) { Text($0.title).tag($0) }
+                }
+                Toggle("Number row", isOn: $model.c.keyboardNumberRow)
+                Toggle("Advanced layout (esc, tab, ⌃ ⌥ ⌘, arrows)", isOn: $model.c.keyboardAdvanced)
+                Toggle("Glide typing", isOn: $model.c.keyboardGlide)
+                Toggle("Auto-capitalise (English)", isOn: $model.c.keyboardAutoCap)
+                SliderRow(title: "Size", value: $model.c.keyboardSize, range: 0.6...1.5, format: percentFormat)
+                if model.c.keyboardX >= 0 {
+                    Button("Dock at the bottom") { model.c.keyboardX = -1; model.c.keyboardY = -1 }
+                }
+                Toggle("Keyboard button in the menu bar", isOn: $model.c.keyboardMenuIcon)
+            } header: {
+                Text("On-screen keyboard")
+            } footer: {
+                Text("Drag the bar on top to move it; the corner arrows resize it and ⌘ switches to the Advanced layout. Hold space and slide to move the text cursor. Hold a key for accents. 🌐 switches English and Arabic.")
+            }
             Section("One finger") {
                 Toggle("Swipe to scroll", isOn: $model.c.oneFingerScroll)
                 if model.c.oneFingerScroll {
@@ -467,10 +526,24 @@ struct TouchTab: View {
                               note: "Higher coasts for longer.")
                 }
             }
-            Section("Right-click") {
+            Section {
                 Toggle("Two-finger tap", isOn: $model.c.twoFingerTap)
-                LabeledContent("Press and hold", value: "Always on")
+                if model.c.twoFingerTap { tapRow("Action", $model.c.twoFingerTapAction) }
+                tapRow("Three-finger tap", $model.c.threeFingerTapAction)
+                LabeledContent("Press and hold", value: "Right-click")
+            } header: {
+                Text("Taps")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func tapRow(_ title: String, _ b: Binding<ButtonBinding>) -> some View {
+        Picker(title, selection: b.action) {
+            ForEach(ButtonAction.allCases.filter { !$0.needsHold }) { Text($0.title).tag($0) }
+        }
+        if b.wrappedValue.action == .shortcut {
+            ShortcutRecorder(shortcut: b.shortcut)
         }
     }
 }
@@ -557,6 +630,7 @@ struct StatusTab: View {
                 LabeledContent("Reports", value: "\(box.value.penRate) per second")
                 LabeledContent("Pressure", value: String(format: "%.2f", box.value.pressure))
                 LabeledContent("Tilt", value: "\(box.value.tiltX)°, \(box.value.tiltY)°")
+                LabeledContent("Noise filter", value: box.value.noiseActive ? "On, \(box.value.noiseLifts) fake lifts caught" : "Off")
             }
             Section("Touch") {
                 LabeledContent("Fingers", value: "\(box.value.fingers)")

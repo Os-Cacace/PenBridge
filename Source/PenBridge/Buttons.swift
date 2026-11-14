@@ -46,6 +46,7 @@ func performButtonAction(_ binding: ButtonBinding) {
         if binding.shortcut.isSet {
             sendKey(CGKeyCode(binding.shortcut.keyCode), CGEventFlags(rawValue: UInt64(binding.shortcut.flags)))
         }
+    case .onScreenKeyboard: KeyboardController.shared.toggle()
     case .accessibilityKeyboard: toggleAccessibilityKeyboard()
     case .missionControl: sendKey(126, arrow)
     case .appExpose: sendKey(125, arrow)

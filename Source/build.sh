@@ -9,15 +9,19 @@ ROOT=${SRC:h}
 DIST=$ROOT/dist
 OUT=$(mktemp -d)
 TARGET=x86_64-apple-macos13.0
-VERSION=2.1
+VERSION=2.2
 
 echo "Building PenBridge…"
 P=$OUT/PenBridge.app
 mkdir -p $P/Contents/MacOS $P/Contents/Resources
-( cd $SRC/PenBridge && swiftc -O -target $TARGET main.swift Touch.swift Settings.swift MenuBar.swift ButtonTest.swift Buttons.swift -o $P/Contents/MacOS/PenBridge )
+( cd $SRC/PenBridge && swiftc -O -target $TARGET main.swift Touch.swift Settings.swift MenuBar.swift ButtonTest.swift Buttons.swift \
+    Glide.swift KeyboardLayout.swift Keyboard.swift KeyboardView.swift KeyboardInput.swift -o $P/Contents/MacOS/PenBridge )
+# Builds the keyboard's word lists from the spell checker on the user's Mac (see Glide.swift).
+swiftc -O -target $TARGET $SRC/PenBridge/lexgen/lexgen.swift -o $P/Contents/MacOS/lexgen
 cp $SRC/PenBridge/Info.plist $P/Contents/Info.plist
 /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 13.0" -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${VERSION//./}" $P/Contents/Info.plist
 cp $SRC/PenBridge/icon/AppIcon.icns $P/Contents/Resources/AppIcon.icns
+codesign -f -s - $P/Contents/MacOS/lexgen
 codesign -f -s - $P
 
 echo "Building the installer…"

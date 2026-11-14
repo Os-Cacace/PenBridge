@@ -186,7 +186,8 @@ final class TouchGestures {
         panelPoint(nx: c.x / touchMaxX, ny: c.y / touchMaxY)
     }
 
-    private func finish(_ contacts: [Contact]) {
+    private func finish(_ all: [Contact]) {
+        let contacts = keyboardRouter.route(all, toScreen: screenPoint)
         let n = contacts.count
         if n != fingerCount { onFingerCountChange?(fingerCount, n) }
         let previous = fingerCount
@@ -195,7 +196,7 @@ final class TouchGestures {
         if n == 1 { onOneFinger?(screenPoint(contacts[0])) }
         if n < 2 {
             if mode != .none {
-                if isTwoFingerTap { postRightClick(at: startCentroid) }
+                if let tap = tapBinding() { performTap(tap, at: startCentroid) }
                 endGesture()
             }
             if n == 0 { maxFingers = 0 }
@@ -218,6 +219,10 @@ final class TouchGestures {
             swipeFired = false
             return
         }
+
+        // Fingers lifting before anything started: a tap ending. The centroid jumps as each
+        // finger leaves, which must not read as a swipe.
+        if mode == .undecided && n < maxFingers { return }
 
         let move = hypot(centroid.x - startCentroid.x, centroid.y - startCentroid.y)
         let spreadChange = abs(spread - startSpread)
@@ -265,8 +270,25 @@ final class TouchGestures {
         lastCentroid = centroid; lastSpread = spread; lastAngle = angle
     }
 
-    private var isTwoFingerTap: Bool {
-        cfg.twoFingerTap && mode == .undecided && maxFingers == 2 && Date().timeIntervalSince(gestureStart) < 0.3
+    /// What a two- or three-finger tap that just ended does: quick, and too short to become a gesture.
+    private func tapBinding() -> ButtonBinding? {
+        guard mode == .undecided, Date().timeIntervalSince(gestureStart) < 0.3 else { return nil }
+        switch maxFingers {
+        case 2: return cfg.twoFingerTap ? cfg.twoFingerTapAction : nil
+        case 3: return cfg.threeFingerTapAction
+        default: return nil
+        }
+    }
+
+    /// Clicks go where the fingers were; everything else runs like a pen button press.
+    private func performTap(_ binding: ButtonBinding, at p: CGPoint) {
+        log("touch: \(maxFingers)-finger tap, \(binding.action.rawValue)")
+        switch binding.action {
+        case .none, .scroll, .eraser: break
+        case .rightClick: postClick(.right, at: p)
+        case .middleClick: postClick(.center, at: p)
+        default: DispatchQueue.main.async { performButtonAction(binding) }
+        }
     }
 
     private func angleDelta(_ a: Double, _ b: Double) -> Double {
@@ -317,10 +339,10 @@ final class TouchGestures {
         ev.post(tap: .cghidEventTap)
     }
 
-    private func postRightClick(at p: CGPoint) {
-        log("touch: two-finger tap")
-        for type in [CGEventType.rightMouseDown, .rightMouseUp] {
-            guard let ev = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .right) else { continue }
+    private func postClick(_ button: CGMouseButton, at p: CGPoint) {
+        let types: [CGEventType] = button == .right ? [.rightMouseDown, .rightMouseUp] : [.otherMouseDown, .otherMouseUp]
+        for type in types {
+            guard let ev = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: button) else { continue }
             ev.setIntegerValueField(.mouseEventClickState, value: 1)
             ev.setIntegerValueField(.eventSourceUserData, value: syntheticMarker)
             ev.post(tap: .cghidEventTap)

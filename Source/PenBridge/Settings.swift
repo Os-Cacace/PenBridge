@@ -2,6 +2,33 @@
 // domain (com.oscacace.PenBridge), so the menu bar panel and `defaults write` both work.
 import Foundation
 
+/// When the charger noise filter runs. A noisy charger ground makes the digitizer
+/// see the tip lift and land again within a few ms, and makes the pointer shake.
+enum NoiseFilterMode: String, Codable, CaseIterable, Identifiable {
+    case off, charging, always
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .charging: return "While charging"
+        case .always: return "Always"
+        }
+    }
+}
+
+/// When the on-screen keyboard appears by itself.
+enum KeyboardShowMode: String, Codable, CaseIterable, Identifiable {
+    case manual, touch, textField
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .manual: return "Only with the keyboard button"
+        case .touch: return "When I tap a text field"
+        case .textField: return "Whenever a text field is active"
+        }
+    }
+}
+
 enum SwipeAction: String, Codable, CaseIterable, Identifiable {
     case none, nextSpace, previousSpace, missionControl, appExpose, showDesktop, back, forward
     var id: String { rawValue }
@@ -28,7 +55,7 @@ enum SwipeAction: String, Codable, CaseIterable, Identifiable {
 /// everything else happens once per press.
 enum ButtonAction: String, Codable, CaseIterable, Identifiable {
     case none, rightClick, middleClick, scroll, eraser, toggleEraser, undo, redo, shortcut,
-         accessibilityKeyboard, missionControl, appExpose, showDesktop, nextSpace, previousSpace, screenshot,
+         onScreenKeyboard, accessibilityKeyboard, missionControl, appExpose, showDesktop, nextSpace, previousSpace, screenshot,
          openSettings, pause
     var id: String { rawValue }
     var title: String {
@@ -42,6 +69,7 @@ enum ButtonAction: String, Codable, CaseIterable, Identifiable {
         case .undo: return "Undo (⌘Z)"
         case .redo: return "Redo (⇧⌘Z)"
         case .shortcut: return "Keyboard shortcut…"
+        case .onScreenKeyboard: return "Show/hide PenBridge keyboard"
         case .accessibilityKeyboard: return "Show/hide Accessibility Keyboard"
         case .missionControl: return "Mission Control"
         case .appExpose: return "App Exposé"
@@ -154,6 +182,9 @@ struct Config: Codable, Equatable {
     var pressureMax = 1.0          // raw pressure treated as full pressure
     var positionSmoothing = 0.0    // stroke jitter filter, adds a little lag when above 0
     var tiltEnabled = true
+    var noiseFilter = NoiseFilterMode.charging
+    var noiseLiftGap = 0.045       // seconds: a lift shorter than this is treated as noise
+    var noiseHover = 2.0           // points of hover shake the pointer ignores
     var palmRejection = true
     var palmDelay = 0.3            // seconds touch stays ignored after the pen was last seen
     var buttons = ButtonMap()
@@ -170,6 +201,8 @@ struct Config: Codable, Equatable {
     var momentumGlide = 0.95       // speed kept per frame while coasting
     var doubleTapTime = 0.5
     var twoFingerTap = true
+    var twoFingerTapAction = ButtonBinding(.rightClick)
+    var threeFingerTapAction = ButtonBinding(.onScreenKeyboard)
 
     // Gestures
     var twoFingerScroll = true
@@ -190,6 +223,17 @@ struct Config: Codable, Equatable {
     var swipe4Right = SwipeAction.previousSpace
     var swipe4Up = SwipeAction.missionControl
     var swipe4Down = SwipeAction.appExpose
+
+    // On-screen keyboard
+    var keyboardShow = KeyboardShowMode.textField
+    var keyboardNumberRow = true
+    var keyboardAdvanced = false   // full Mac layout with esc, tab, modifiers and arrows
+    var keyboardX = -1.0           // floating position on the built-in screen; -1 = docked
+    var keyboardY = -1.0
+    var keyboardGlide = true
+    var keyboardAutoCap = true
+    var keyboardSize = 1.0
+    var keyboardMenuIcon = true
 
     var verboseLog = false
 
@@ -220,6 +264,8 @@ struct Config: Codable, Equatable {
         c.pressureMax = fit(c.pressureMax, 0.2...1)
         c.positionSmoothing = fit(c.positionSmoothing, 0...1)
         c.palmDelay = fit(c.palmDelay, 0...1)
+        c.noiseLiftGap = fit(c.noiseLiftGap, 0.01...0.12)
+        c.noiseHover = fit(c.noiseHover, 0...8)
         c.penScrollSpeed = fit(c.penScrollSpeed, Self.speedRange)
         c.oneFingerStart = fit(c.oneFingerStart, 2...40)
         c.scrollSpeed = fit(c.scrollSpeed, Self.speedRange)
@@ -230,6 +276,7 @@ struct Config: Codable, Equatable {
         c.zoomSpeed = fit(c.zoomSpeed, 0.2...4)
         c.rotateStart = fit(c.rotateStart, 5...45)
         c.swipeStart = fit(c.swipeStart, 30...300)
+        c.keyboardSize = fit(c.keyboardSize, 0.6...1.5)
         return c
     }
 
@@ -328,4 +375,6 @@ struct LiveStatus: Equatable {
     var gesture = "None"
     var hasPermissions = false
     var realtime = false
+    var noiseActive = false
+    var noiseLifts = 0
 }

@@ -27,6 +27,7 @@ to other touchscreen laptops.
 - Pressure and tilt reach apps like Krita, Photoshop, Affinity, Chrome/Brave and other Wacom-aware apps
 - Pressure curve with a live graph, Soft/Normal/Firm presets, full-pressure point, lightest touch and smoothing
 - Optional stroke smoothing, palm rejection and eraser support
+- Charger noise filter: no phantom clicks or hover shake while plugged in
 - Pen test area that draws with the pressure apps actually receive
 
 **Pen buttons**
@@ -37,9 +38,16 @@ to other touchscreen laptops.
 - Guided **button test** that shows exactly what your pen sends
 
 **Touch**
-- One-finger scroll with momentum, two-finger scroll, pinch to zoom, rotate, two-finger tap for right-click
+- One-finger scroll with momentum, two-finger scroll, pinch to zoom, rotate
+- Two- and three-finger taps with any action or shortcut (right-click and keyboard by default)
 - 3- and 4-finger swipes with a chosen action for each direction
 - Every threshold and speed is adjustable
+
+**On-screen keyboard**
+- iPad-style keyboard in English and Arabic that appears in text fields, with glide typing and suggestions
+- Advanced Mac layout whose ⌘ ⇧ ⌥ ⌃ keys really hold down, so modifier-clicks work with the pen
+- Shortcut bar: copy/paste/undo, app switching, text navigation, Spotlight, screenshots and more
+- Floating or docked, resizable; Liquid Glass on macOS 26
 
 **Setup**
 - Guided installer with compatibility checks, no Terminal needed

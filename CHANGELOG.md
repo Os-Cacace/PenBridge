@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2
+
+- **On-screen keyboard**: iPad-style keyboard for the touchscreen, English and Arabic, shown
+  automatically in text fields. Glide typing, word suggestions, auto-capitals, accents on long-press,
+  space-bar cursor, number row, resizable, floating or docked (drop it near the bottom edge to dock).
+  - **Advanced** layout: a full Mac keyboard with esc, tab and arrows. ⌘ ⇧ ⌥ ⌃ really hold the key
+    (tap for the next click or key, double-tap to lock), so Photoshop's ⌥-click or ⇧-click work with the pen.
+  - **Shortcut bar** on both layouts: Edit, Apps, Move and System shortcuts, one tap each.
+  - **Arabic** uses the Mac Arabic positions, with a shift layer for the harakat.
+  - Glide word lists are built on your own Mac from the macOS spell checker the first time
+    each language is used (a few minutes, in the background).
+- **Touch**: two- and three-finger taps run any pen-button action or a recorded shortcut.
+  Fingers lifting slightly out of step no longer count as a swipe.
+- **Charger noise filter**: stops the pen clicking on its own and steadies hover while charging.
+
 ## 2.1 (first public release)
 
 - Guided installer: compatibility checks, PenBridge install, optional reversible VoodooI2C tune-up, permissions.

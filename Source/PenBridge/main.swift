@@ -4,6 +4,7 @@
 // Settings.swift holds the options, MenuBar.swift the panel, Touch.swift the gestures.
 import Foundation
 import IOKit.hid
+import IOKit.ps
 import CoreGraphics
 import ApplicationServices
 import AppKit
@@ -155,12 +156,14 @@ func handlePenReport(_ r: UnsafePointer<UInt8>, _ length: Int) {
     let statusChanged = inRange != pen.inRange || invert != pen.invert || (b & 0x0E) != (lastStatusByte & 0x0E)
     lastStatusByte = b
     pen.inRange = inRange; pen.invert = invert
+    keyboardRouter.pen(touching: pen.tip && !pen.eraser, at: panelPoint(nx: Double(pen.x) / penMaxX, ny: Double(pen.y) / penMaxY))
     sideButtonsUpdate()
     if statusChanged { updateProximity() }
 }
 
 // Ends anything the pen is doing, for when PenBridge is paused or the pen is turned off.
 func releasePen() {
+    flushPenRelease()
     pen.tip = false; pen.barrel = false; pen.eraser = false; pen.invert = false
     sideButtonsUpdate()
     leaveTimer?.invalidate(); leaveTimer = nil
@@ -258,6 +261,77 @@ func postPenMouse(_ type: CGEventType, at p: CGPoint) {
     ev.post(tap: .cghidEventTap)
 }
 
+// MARK: - Charger noise filter
+
+// A charger with a noisy ground couples into the digitizer: the tip reads as lifting
+// and landing again within a few ms (VoodooI2C turns each into a click) and the
+// hover position shakes. A pen release is held back for noiseLiftGap; a press that
+// arrives in that time was noise, so the stroke just continues as a drag. Every held
+// release is always posted afterwards: a lost mouse-up freezes all input.
+var onACPower = false
+var noiseLiftCount = 0
+var pendingUp: CFRunLoopTimer?
+var hoverAnchor: CGPoint?
+
+var noiseFilterOn: Bool { cfg.noiseFilter == .always || (cfg.noiseFilter == .charging && onACPower) }
+
+func isOnACPower() -> Bool {
+    (IOPSGetProvidingPowerSourceType(nil)?.takeUnretainedValue() as String?) == kIOPMACPowerKey
+}
+
+func holdPenRelease(at p: CGPoint) {
+    if let t = pendingUp { CFRunLoopTimerInvalidate(t) }
+    let t = CFRunLoopTimerCreateWithHandler(nil, CFAbsoluteTimeGetCurrent() + cfg.noiseLiftGap, 0, 0, 0) { _ in
+        pendingUp = nil
+        postPenMouse(.leftMouseUp, at: CGEvent(source: nil)?.location ?? p)
+    }
+    CFRunLoopAddTimer(CFRunLoopGetCurrent(), t, .commonModes)
+    pendingUp = t
+}
+
+/// Posts a held release now (pause, pen off, or something else pressing).
+func flushPenRelease() {
+    guard let t = pendingUp else { return }
+    CFRunLoopTimerInvalidate(t)
+    pendingUp = nil
+    postPenMouse(.leftMouseUp, at: CGEvent(source: nil)?.location ?? .zero)
+}
+
+/// Pen events from VoodooI2C only. Returns false when the event is dropped.
+func filterPenNoise(_ ev: CGEvent, _ type: inout CGEventType) -> Bool {
+    switch type {
+    case .leftMouseUp:
+        holdPenRelease(at: ev.location)
+        return false
+    case .leftMouseDown:
+        hoverAnchor = nil
+        if let t = pendingUp {
+            CFRunLoopTimerInvalidate(t)
+            pendingUp = nil
+            noiseLiftCount += 1
+            ev.type = .leftMouseDragged
+            type = .leftMouseDragged
+            if verbose { log("pen: noise lift merged") }
+        }
+    case .mouseMoved:
+        if pendingUp != nil {
+            // The tip is (probably) still down: keep the stroke going.
+            ev.type = .leftMouseDragged
+            ev.setIntegerValueField(.mouseEventButtonNumber, value: 0)
+            type = .leftMouseDragged
+        } else if cfg.noiseHover > 0 {
+            let loc = ev.location
+            if let a = hoverAnchor, hypot(loc.x - a.x, loc.y - a.y) < cfg.noiseHover {
+                ev.location = a
+            } else {
+                hoverAnchor = loc
+            }
+        }
+    default: break
+    }
+    return true
+}
+
 // MARK: - Event annotation
 
 var smoothedPressure = 0.0
@@ -283,14 +357,17 @@ func annotate(_ ev: CGEvent, _ type: CGEventType) {
     }
     let pressure: Double
     switch type {
+    case .leftMouseDragged where pendingUp != nil: pressure = lastPressure   // inside a noise lift
     case .leftMouseDown, .leftMouseDragged, .rightMouseDown, .rightMouseDragged: pressure = normalizedPressure()
     default: pressure = 0
     }
     lastPressure = pressure
-    if cfg.positionSmoothing > 0 && (type == .leftMouseDown || type == .leftMouseDragged) {
+    // A noisy charger also shakes the stroke, so the filter runs at least half strength then.
+    let smoothing = noiseFilterOn ? max(cfg.positionSmoothing, 0.5) : cfg.positionSmoothing
+    if smoothing > 0 && (type == .leftMouseDown || type == .leftMouseDragged) {
         if type == .leftMouseDown { strokeFilter.reset() }
         let loc = ev.location
-        let f = strokeFilter.filter(x: loc.x, y: loc.y, time: Double(ev.timestamp) / 1e9, strength: cfg.positionSmoothing)
+        let f = strokeFilter.filter(x: loc.x, y: loc.y, time: Double(ev.timestamp) / 1e9, strength: smoothing)
         ev.location = CGPoint(x: f.x, y: f.y)
     }
     var buttons: Int64 = 0
@@ -404,6 +481,8 @@ func pushConfig(_ c: Config) {
         let was = cfg
         cfg = c
         if (c.paused && !was.paused) || (!c.penEnabled && was.penEnabled) { releasePen() }
+        if c.paused && !was.paused { DispatchQueue.main.async { KeyboardController.shared.hide() } }
+        if !noiseFilterOn { flushPenRelease(); hoverAnchor = nil }
         if (c.paused && !was.paused) || (!c.touchEnabled && was.touchEnabled) { touch.reset() }
         if map != activeButtons {
             activeButtons = map
@@ -425,11 +504,15 @@ func runOnInput(_ block: @escaping () -> Void) {
 func refreshSettings() {
     let stored = Config.load()
     let display = builtInDisplay()
+    let ac = isOnACPower()
     DispatchQueue.main.async { settingsModel.updateFromDefaults(stored) }
     guard let loop = inputRunLoop else { return }
     CFRunLoopPerformBlock(loop, CFRunLoopMode.defaultMode.rawValue) {
         panelBounds = display.bounds
         panelRotation = display.rotation
+        if onACPower != ac { log("PenBridge: \(ac ? "charger connected" : "on battery")") }
+        onACPower = ac
+        if !noiseFilterOn { flushPenRelease(); hoverAnchor = nil }
     }
     CFRunLoopWakeUp(loop)
 }
@@ -453,6 +536,8 @@ func publishStatus() {
     s.gesture = touch.gestureName
     s.hasPermissions = hasPermissions
     s.realtime = realtimePolicyOn
+    s.noiseActive = noiseFilterOn
+    s.noiseLifts = noiseLiftCount
     DispatchQueue.main.async { settingsModel.live = s }
 }
 
@@ -469,6 +554,8 @@ func startInput() {
         if cfg.paused { return Unmanaged.passUnretained(ev) }
         let synthetic = ev.getIntegerValueField(.eventSourceUserData) == syntheticMarker
         var type = type
+        let held = keyboardShared.heldFlags   // ⌘ ⇧ ⌥ ⌃ lit on the on-screen keyboard
+        if !held.isEmpty { ev.flags.formUnion(held) }
         // VoodooI2C turns the upper side button into right-button events. Unless that button
         // is set to Right-click, hold them back; a release always follows its press through.
         if !synthetic && penIsActive() && (type == .rightMouseDown || type == .rightMouseUp || type == .rightMouseDragged) {
@@ -489,6 +576,17 @@ func startInput() {
                     type = .mouseMoved
                 }
             }
+        }
+        if !synthetic, let pass = keyboardRouter.mouseEvent(type, ev) {
+            if type == .leftMouseUp { leftButtonDown = false }
+            return pass ? Unmanaged.passUnretained(ev) : nil
+        }
+        if pendingUp != nil && !synthetic && !penIsActive() && type == .leftMouseDown {
+            flushPenRelease()   // a finger pressing right after the pen: end the pen's click first
+            return nil
+        }
+        if !synthetic && !penScrolling && noiseFilterOn && penIsActive() && !filterPenNoise(ev, &type) {
+            return nil
         }
         if penScrolling && !synthetic && (type == .leftMouseDown || type == .leftMouseDragged) {
             return nil   // the pen is scrolling (see penScrollUpdate); mouse-ups still pass
@@ -579,4 +677,28 @@ penKeys.onChord = { buttonTest.key($0) }
 penKeys.onTop = { topButtonPressed($0) }
 watchFrontApp()
 penKeys.start()
+FocusWatcher.shared.start()
+// Scripts can drive the keyboard: post "com.oscacace.PenBridge.keyboard" with show, hide or toggle.
+DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.oscacace.PenBridge.keyboard"),
+                                                    object: nil, queue: .main) { note in
+    let kb = KeyboardController.shared
+    switch note.object as? String {
+    case "show": kb.show(auto: false)
+    case "hide": kb.hide()
+    case let s? where s.hasPrefix("snapshot:"): kb.snapshot(to: String(s.dropFirst(9)))
+    case let s? where s.hasPrefix("hold:"):   // hold:x,y;x,y;... in keyboard view points, never released
+        let pts = s.dropFirst(5).split(separator: ";").compactMap { pair -> CGPoint? in
+            let v = pair.split(separator: ",").compactMap { Double($0) }
+            return v.count == 2 ? CGPoint(x: v[0], y: v[1]) : nil
+        }
+        if !pts.isEmpty { kb.simulate(pts, hold: true) }
+    case "cancel": kb.cancelContact(99)
+    default: kb.toggle()
+    }
+}
+// Stopping PenBridge (launchctl, logout) must not leave ⌘ ⌥ ⌃ held down system-wide.
+signal(SIGTERM, SIG_IGN)
+let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+termSource.setEventHandler { KeyboardController.shared.releaseModifiers(); exit(0) }
+termSource.resume()
 app.run()
