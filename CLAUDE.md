@@ -7,7 +7,8 @@ fully before changing anything.
 ## Ground rules
 
 - **Never write to the EFI partition without the user's explicit go-ahead**, and only
-  through `Driver/pentool.sh install` (it backs up `EFI/OC` first and verifies bytes).
+  through `Driver/pentool.sh install` (it backs up `EFI/OC` first and verifies bytes) or,
+  for the sensor driver, `Driver/IntelISH/install.sh` (it backs up `config.plist` first).
   A bad kext or config.plist can stop the Mac from booting. Before any EFI change, make
   sure the user has a bootable USB with a working EFI.
 - Mounting the EFI and `pentool.sh diagnose|install|restore` need root. Give the user
@@ -24,7 +25,9 @@ fully before changing anything.
 | `Touchintosh Installer.app` | SwiftUI installer. Reads `Driver/` next to the app first, else its bundled copy, so editing `Driver/*` needs no rebuild |
 | `Driver/pentool.sh` | Root tool: `selftest`, `diagnose`, `install`, `restore` (usage at the top of the file) |
 | `Driver/patches.conf` | VoodooI2CHID patch table, one `build` block per supported original binary |
+| `Driver/IntelISH/` | Sensor hub driver for auto-rotate (GPL-2.0 port of yjmd2222/IntelISH): `src/`, `build.sh`, `install.sh`, `README.md` |
 | `Source/Touchintosh/` | Touchintosh source (Swift, AppKit + SwiftUI, no Xcode project) |
+| `Source/Touchintosh/controls/` | Control Center extension (WidgetKit, macOS 26). The only part with an Xcode project; `build.sh` skips it without Xcode |
 | `Source/Installer/Installer.swift` | The installer app |
 | `Source/build.sh` | Rebuilds both apps and the zip. Needs Command Line Tools (`xcode-select --install`) |
 
@@ -120,6 +123,24 @@ Touchintosh decodes raw HID reports. On the reference machine:
 
 Get the real values from the device's report descriptor (`ioreg -r -c IOHIDDevice -l`
 shows `ReportDescriptor`), then rebuild with `zsh Source/build.sh`.
+
+## Auto-rotate and the sensor driver
+
+`Rotation.swift` reads `AccelSample` from the `IntelISH` IORegistry node five times a second
+and turns the built-in display with `kIOFBSetTransform`. Axes follow the Windows sensor
+convention (the axis pointing up reads −1 g). On the reference machine: y < 0 → 0°, y > 0 →
+180°, x > 0 → 90°, x < 0 → 270°. `panelPoint` in `main.swift` maps pen and touch for each angle.
+
+Porting the driver to another laptop (see `Driver/IntelISH/README.md` for what it changes):
+1. `ioreg -r -n ISHD@13 -l` (or search for `pciclass,070000` from Intel): note the device ID.
+   Add it to `IOPCIPrimaryMatch` in `src/Info.plist` and to the ID check in `IntelISH::start`.
+2. Install, restart, then read the node: `ioreg -r -c IntelISH -l -w0`. `StartError` and
+   `TransportError` say where it stopped; `Unexpected-N` holds messages it didn't expect
+   (stage, pending command, pending device, a pad byte, then the message).
+3. Kext `IOLog` lines may not reach `log show`, so rely on those properties. For live
+   experiments set `DebugRequests = true` in the personality and send requests through the
+   `DebugRequest` property; the answer appears in `DebugResponse`.
+4. If portrait is upside down, that's the user-facing **Reverse portrait direction** switch.
 
 ## Rules learned the hard way (keep them)
 

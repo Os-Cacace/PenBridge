@@ -235,6 +235,10 @@ struct Config: Codable, Equatable {
     var keyboardSize = 1.0
     var keyboardMenuIcon = true
 
+    // Screen rotation (needs the IntelISH sensor kext)
+    var autoRotate = false
+    var autoRotateReverse = false  // swaps which way portrait turns
+
     var verboseLog = false
 
     /// Pressure after the full-pressure point and curve, before smoothing and the minimum.

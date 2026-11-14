@@ -9,19 +9,31 @@ ROOT=${SRC:h}
 DIST=$ROOT/dist
 OUT=$(mktemp -d)
 TARGET=x86_64-apple-macos13.0
-VERSION=3.0
+VERSION=3.1
 
 echo "Building Touchintosh…"
 P=$OUT/Touchintosh.app
 mkdir -p $P/Contents/MacOS $P/Contents/Resources
 ( cd $SRC/Touchintosh && swiftc -O -target $TARGET main.swift Touch.swift Settings.swift MenuBar.swift ButtonTest.swift Buttons.swift \
-    Glide.swift KeyboardLayout.swift Keyboard.swift KeyboardView.swift KeyboardInput.swift -o $P/Contents/MacOS/Touchintosh )
+    Glide.swift KeyboardLayout.swift Keyboard.swift KeyboardView.swift KeyboardInput.swift Rotation.swift -o $P/Contents/MacOS/Touchintosh )
 # Builds the keyboard's word lists from the spell checker on the user's Mac (see Glide.swift).
 swiftc -O -target $TARGET $SRC/Touchintosh/lexgen/lexgen.swift -o $P/Contents/MacOS/lexgen
 cp $SRC/Touchintosh/Info.plist $P/Contents/Info.plist
 /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 13.0" -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${VERSION//./}" $P/Contents/Info.plist
 cp $SRC/Touchintosh/icon/AppIcon.icns $P/Contents/Resources/AppIcon.icns
 codesign -f -s - $P/Contents/MacOS/lexgen
+# Control Center controls (macOS 26): a WidgetKit extension, which needs full Xcode to build.
+# Without Xcode the app is built without it and everything else works.
+if xcodebuild -version >/dev/null 2>&1; then
+  echo "Building the Control Center extension…"
+  xcodebuild -quiet -project $SRC/Touchintosh/controls/TouchintoshControls.xcodeproj -target TouchintoshControls \
+    -configuration Release SYMROOT=$OUT/controls/sym OBJROOT=$OUT/controls/obj build
+  mkdir -p $P/Contents/PlugIns
+  ditto $OUT/controls/sym/Release/TouchintoshControls.appex $P/Contents/PlugIns/TouchintoshControls.appex
+  codesign -f -s - --entitlements $SRC/Touchintosh/controls/Controls.entitlements $P/Contents/PlugIns/TouchintoshControls.appex
+else
+  echo "Xcode not found: skipping the Control Center extension."
+fi
 codesign -f -s - $P
 
 echo "Building the installer…"
@@ -54,6 +66,9 @@ rm -rf $STAGE $DIST/Touchintosh-Installer.zip
 mkdir -p $STAGE
 ditto "$I" "$STAGE/Touchintosh Installer.app"
 ditto $ROOT/Driver $STAGE/Driver
+rm -rf $STAGE/Driver/IntelISH/build $STAGE/Driver/IntelISH/MacKernelSDK
+# The sensor hub driver for auto-rotate (GPL-2.0, source in Driver/IntelISH/src).
+if zsh $ROOT/Driver/IntelISH/build.sh; then ditto $ROOT/Driver/IntelISH/build/IntelISH.kext $STAGE/Driver/IntelISH/IntelISH.kext; fi
 ditto $ROOT/Source $STAGE/Source
 cp $ROOT/README.md $ROOT/CLAUDE.md $ROOT/LICENSE $STAGE/
 rm -rf $OUT

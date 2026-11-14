@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1
+
+- **Auto-rotate**: the screen turns when you turn the laptop, and pen and touch follow.
+  It stays put while the laptop lies flat. Needs the new IntelISH sensor driver in the
+  OpenCore EFI (`Driver/IntelISH`, a GPL-2.0 port of yjmd2222/IntelISH for Comet Lake
+  sensor hubs). Tested on the Dell Latitude 7410 2-in-1 only.
+- **Control Center switch** for auto-rotate on macOS 26: Edit Controls → Add a Control → Touchintosh.
+- Dragging, two-finger gestures and the on-screen keyboard now map correctly on a screen
+  rotated to portrait.
+
 ## 3.0: PenBridge is now Touchintosh
 
 - New name and icon (several other projects were already called PenBridge).

@@ -202,9 +202,9 @@ func builtInDisplay() -> (bounds: CGRect, rotation: Double) {
 func panelPoint(nx: Double, ny: Double) -> CGPoint {
     let x: Double, y: Double
     switch Int(panelRotation) {
-    case 90: x = ny; y = 1 - nx
+    case 90: x = 1 - ny; y = nx     // confirmed on a rotated panel (auto-rotate)
     case 180: x = 1 - nx; y = 1 - ny
-    case 270: x = 1 - ny; y = nx
+    case 270: x = ny; y = 1 - nx
     default: x = nx; y = ny
     }
     return CGPoint(x: panelBounds.minX + x * panelBounds.width, y: panelBounds.minY + y * panelBounds.height)
@@ -678,6 +678,7 @@ penKeys.onTop = { topButtonPressed($0) }
 watchFrontApp()
 penKeys.start()
 FocusWatcher.shared.start()
+AutoRotate.shared.settingsChanged()
 // Scripts can drive the keyboard: post "com.oscacace.Touchintosh.keyboard" with show, hide or toggle.
 DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.oscacace.Touchintosh.keyboard"),
                                                     object: nil, queue: .main) { note in
@@ -695,6 +696,11 @@ DistributedNotificationCenter.default().addObserver(forName: Notification.Name("
     case "cancel": kb.cancelContact(99)
     default: kb.toggle()
     }
+}
+// The Control Center switch changed a setting: pick it up now instead of at the next 2 s poll.
+DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.oscacace.Touchintosh.settingsChanged"),
+                                                    object: nil, queue: nil) { _ in
+    DispatchQueue.global(qos: .utility).async { refreshSettings() }
 }
 // Stopping Touchintosh (launchctl, logout) must not leave ⌘ ⌥ ⌃ held down system-wide.
 signal(SIGTERM, SIG_IGN)

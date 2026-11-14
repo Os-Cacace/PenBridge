@@ -68,6 +68,7 @@ final class MenuBarController: NSObject, NSWindowDelegate {
         model.onChange = { [weak self] in
             self?.updateIcon(); self?.updateKeyboardItem()
             KeyboardController.shared.settingsChanged()
+            AutoRotate.shared.settingsChanged()
         }
         model.onClose = { [weak self] in self?.closePanel() }
         // Rotating the screen or plugging in a display moves the usable area.
@@ -550,6 +551,22 @@ struct TouchTab: View {
                     SliderRow(title: "Glide", value: $model.c.momentumGlide, range: 0.85...0.99, format: percentFormat,
                               note: "Higher coasts for longer.")
                 }
+            }
+            Section {
+                if AutoRotate.shared.sensorAvailable {
+                    Toggle("Rotate the screen automatically", isOn: $model.c.autoRotate)
+                    if model.c.autoRotate {
+                        Toggle("Reverse portrait direction", isOn: $model.c.autoRotateReverse)
+                    }
+                } else {
+                    LabeledContent("Rotate the screen automatically", value: "No sensor")
+                }
+            } header: {
+                Text("Screen rotation")
+            } footer: {
+                Text(AutoRotate.shared.sensorAvailable
+                     ? "Turns the built-in display when you turn the laptop. It stays as it is while lying flat."
+                     : "Needs the IntelISH sensor driver in the OpenCore EFI, which reads the laptop's accelerometer.")
             }
             Section {
                 Toggle("Two-finger tap", isOn: $model.c.twoFingerTap)

@@ -51,6 +51,11 @@ to other touchscreen laptops.
 - Shortcut bar: copy/paste/undo, app switching, text navigation, Spotlight, screenshots and more
 - Floating or docked, resizable; Liquid Glass on macOS 26
 
+**Auto-rotate**
+- The screen turns when you turn the laptop, and pen and touch follow the rotation
+- A switch in Control Center on macOS 26, and one in the Touch tab
+- Needs the included [IntelISH sensor driver](Driver/IntelISH) in your OpenCore EFI (tested on the Latitude 7410 only)
+
 **Setup**
 - Guided installer with compatibility checks, no Terminal needed
 - Optional VoodooI2C tune-up: pen ~300 reports/s, no stuck pen, lower idle CPU. It's backed up and reversible.
@@ -123,6 +128,25 @@ then adapt it for your hardware.
 - **Accessibility Keyboard on a button:** in **System Settings → Accessibility → Shortcut**,
   leave only *Accessibility Keyboard* ticked. The button then shows and hides it.
 
+## 🔄 Auto-rotate
+
+Auto-rotate reads the laptop's accelerometer, which sits behind Intel's sensor hub. macOS
+has no driver for that hub, so Touchintosh includes one: [`Driver/IntelISH`](Driver/IntelISH),
+a GPL-2.0 port of [yjmd2222/IntelISH](https://github.com/yjmd2222/IntelISH).
+
+1. Keep a bootable USB with your current EFI, then install the driver and restart:
+   ```bash
+   cd ~/Documents/Touchintosh-Installer   # wherever you put the folder
+   sudo zsh Driver/IntelISH/install.sh
+   ```
+2. Click the pen icon → **Touch** → **Screen rotation** → **Rotate the screen automatically**.
+   If portrait comes out upside down, turn on **Reverse portrait direction**.
+3. On macOS 26, add the switch to Control Center: **Edit Controls → Add a Control → Touchintosh**.
+
+It has been tested on the Dell Latitude 7410 2-in-1 (sensor hub `8086:02fc`). On another
+laptop the driver stays idle if it can't use the hub; `sudo zsh Driver/IntelISH/install.sh off`
+switches it off again.
+
 ## 🤖 Claude helper: adapt it to your laptop
 
 If a check fails, click **Copy for Claude** in the installer. It copies a ready-made prompt
@@ -175,6 +199,7 @@ zsh Source/build.sh            # builds Touchintosh + the installer into dist/
 | `Source/Touchintosh/` | The menu bar app (Swift, AppKit + SwiftUI) |
 | `Source/Installer/` | The installer app |
 | `Driver/` | `pentool.sh` (driver tool) and `patches.conf` (patch table) |
+| `Driver/IntelISH/` | Sensor hub driver for auto-rotate (GPL-2.0), with its own `build.sh` and `install.sh` |
 | `CLAUDE.md` | Guide for Claude Code |
 
 `zsh Driver/pentool.sh selftest <VoodooI2CHID.kext>` tests the patch table on a copy of
@@ -221,4 +246,5 @@ Installer → **Install Touchintosh** → **Uninstall**. Its settings stay in
 
 ## 📄 License
 
-Touchintosh and the installer are released under the [MIT License](LICENSE).
+Touchintosh and the installer are released under the [MIT License](LICENSE). The sensor
+hub driver in [`Driver/IntelISH`](Driver/IntelISH) is GPL-2.0-only, like the project it is ported from.
