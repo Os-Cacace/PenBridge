@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1
+
+- The menu bar keyboard icon now turns automatic showing on or off (filled when on), so the
+  on-screen keyboard stays away while you use a hardware keyboard. Right-click or ⌥-click it
+  to show or hide the keyboard right away.
+
 ## 2.2
 
 - **On-screen keyboard**: iPad-style keyboard for the touchscreen, English and Arabic, shown

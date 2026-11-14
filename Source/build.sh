@@ -9,7 +9,7 @@ ROOT=${SRC:h}
 DIST=$ROOT/dist
 OUT=$(mktemp -d)
 TARGET=x86_64-apple-macos13.0
-VERSION=2.2
+VERSION=2.2.1
 
 echo "Building PenBridge…"
 P=$OUT/PenBridge.app

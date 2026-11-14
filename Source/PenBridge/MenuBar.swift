@@ -91,24 +91,45 @@ final class MenuBarController: NSObject, NSWindowDelegate {
     private var keyboardItem: NSStatusItem?
 
     /// A menu bar button that shows and hides the on-screen keyboard with one tap.
+    /// The keyboard icon switches automatic showing on and off (filled = on), for when a
+    /// hardware keyboard is in use. Right-click or ⌥-click shows or hides the keyboard now.
     private func updateKeyboardItem() {
         if model.c.keyboardMenuIcon {
-            guard keyboardItem == nil else { return }
-            let k = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "On-screen keyboard")
+            if keyboardItem == nil {
+                let k = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+                k.button?.target = self
+                k.button?.action = #selector(keyboardItemClicked)
+                k.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+                keyboardItem = k
+            }
+            let auto = model.c.keyboardShow != .manual
+            let image = NSImage(systemSymbolName: auto ? "keyboard.fill" : "keyboard", accessibilityDescription: "On-screen keyboard")
             image?.isTemplate = true
-            k.button?.image = image
-            k.button?.toolTip = "Show or hide the on-screen keyboard"
-            k.button?.target = self
-            k.button?.action = #selector(toggleKeyboard)
-            keyboardItem = k
+            keyboardItem?.button?.image = image
+            keyboardItem?.button?.toolTip = (auto ? "Keyboard shows by itself in text fields. Click to stop."
+                                                  : "Keyboard shows only when asked. Click to show it in text fields again.")
+                + "\nRight-click to show or hide it now."
         } else if let k = keyboardItem {
             NSStatusBar.system.removeStatusItem(k)
             keyboardItem = nil
         }
     }
 
-    @objc private func toggleKeyboard() { KeyboardController.shared.toggle() }
+    @objc private func keyboardItemClicked() {
+        let ev = NSApp.currentEvent
+        if ev?.type == .rightMouseUp || ev?.modifierFlags.contains(.option) == true {
+            KeyboardController.shared.toggle()
+            return
+        }
+        if model.c.keyboardShow == .manual {
+            let last = UserDefaults.standard.string(forKey: "keyboardLastAutoShow").flatMap(KeyboardShowMode.init) ?? .textField
+            model.c.keyboardShow = last == .manual ? .textField : last
+        } else {
+            UserDefaults.standard.set(model.c.keyboardShow.rawValue, forKey: "keyboardLastAutoShow")
+            model.c.keyboardShow = .manual
+            KeyboardController.shared.hideIfAutoShown()
+        }
+    }
 
     func showPanel() {
         if !panel.isVisible { openPanel() }
@@ -504,6 +525,10 @@ struct TouchTab: View {
                     Button("Dock at the bottom") { model.c.keyboardX = -1; model.c.keyboardY = -1 }
                 }
                 Toggle("Keyboard button in the menu bar", isOn: $model.c.keyboardMenuIcon)
+                if model.c.keyboardMenuIcon {
+                    Text("Click it to turn automatic showing on or off (filled when on), handy with a hardware keyboard. Right-click shows or hides the keyboard now.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             } header: {
                 Text("On-screen keyboard")
             } footer: {
